@@ -16,7 +16,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,33 +48,30 @@ fun GeneratorImageScreen(
 ){
 
     val scope = rememberCoroutineScope()
-
-    LaunchedEffect(Unit) {
-        scope.launch {
-            viewModel.generateImage("test")
-        }
-    }
-
     val state by viewModel.generateImage.collectAsState()
 
-    GeneratorImageContent(state)
+    GeneratorImageContent(
+        state,
+        onGeneratedClick = {prompt ->
+            scope.launch {
+                viewModel.generateImage(prompt)
+            }
+        }
+    )
 
 }
 
 @Composable
 fun GeneratorImageContent(
-    state: NetworkState?
+    state: NetworkState?,
+    onGeneratedClick:(String)->Unit = {}
 ) {
-    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.ai_logo))
-    var promptText by rememberSaveable {
-        mutableStateOf("")
-    }
-    var loadingState by rememberSaveable {
-        mutableStateOf(false)
-    }
-    var generatorImage by rememberSaveable {
-        mutableStateOf("")
-    }
+    val logo by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.ai_logo))
+    val loading by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.loading))
+    var promptText by rememberSaveable { mutableStateOf("") }
+    var loadingState by rememberSaveable { mutableStateOf(false) }
+    var generatorImage by rememberSaveable { mutableStateOf("") }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -89,11 +85,12 @@ fun GeneratorImageContent(
             NetworkState.Status.SUCCESS -> {
                 loadingState = false
                 generatorImage = (state.data as ImageGenerator).data[0]
-                Log.e("TAG", "GeneratorImageContent: $generatorImage")
+                Log.e("TAG", "GeneratorImageContent : SUCCESS $generatorImage")
             }
             NetworkState.Status.FAILED -> {
                 loadingState = false
-                Log.e("TAG", "GeneratorImageContent: ${state.msg}")
+                generatorImage = ""
+                Log.e("TAG", "GeneratorImageContent: FAILED ${state.msg}")
             }
             NetworkState.Status.RUNNING -> {
                 loadingState = true
@@ -110,21 +107,23 @@ fun GeneratorImageContent(
         )
 
         Box(
-            modifier = Modifier.size(300.dp)
+            modifier = Modifier.size(300.dp),
+            contentAlignment = Alignment.Center
         ) {
             if (generatorImage.isNotEmpty()){
                 Image(
                     painter = rememberAsyncImagePainter(model = generatorImage),
                     contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .height(200.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
                 )
-            }
-            if (loadingState) {
+            }else if (loadingState) {
                 LottieAnimation(
-                    composition = composition,
+                    composition = loading,
+                    iterations = LottieConstants.IterateForever
+                )
+            }else{
+                LottieAnimation(
+                    composition = logo,
                     iterations = LottieConstants.IterateForever
                 )
             }
@@ -164,7 +163,7 @@ fun GeneratorImageContent(
                     .height(52.dp),
                 shape = RoundedCornerShape(5.dp),
                 onClick = {
-
+                    onGeneratedClick(promptText)
                 },
             ) {
                 Text(
